@@ -520,10 +520,11 @@ static DWORD LoadBuildProductId(TCascStorage * hs, const char * /* szVariableNam
 // "WOW-45779patch10.0.2_Beta"
 // "30013_Win32_2_2_0_Ptr_ptr"
 // "prometheus-0_8_0_0-24919"
-static DWORD LoadBuildNumber(TCascStorage * hs, const char * /* szVariableName */, const char * szDataBegin, const char * szDataEnd, void * /* pvParam */)
+static DWORD LoadBuildNumber(TCascStorage * hs, const char * /* szVariableName */, const char * szDataBegin, const char * szDataEnd, void * pvParam)
 {
+    LPDWORD PtrBuildNumber = (LPDWORD)(pvParam);
     DWORD dwBuildNumber = 0;
-    DWORD dwMaxValue = 0;
+    DWORD dwAccumulator = 0;
 
     // Parse the string and take the largest decimal numeric value
     // "build-name = 1.21.5.4037-retail"
@@ -532,13 +533,13 @@ static DWORD LoadBuildNumber(TCascStorage * hs, const char * /* szVariableName *
         // If the character is a digit, we include it into the built number
         if(IsCharDigit(szDataBegin[0]))
         {
-            dwBuildNumber = (dwBuildNumber * 10) + (szDataBegin[0] - '0');
-            dwMaxValue = CASCLIB_MAX(dwBuildNumber, dwMaxValue);
+            dwAccumulator = (dwAccumulator * 10) + (szDataBegin[0] - '0');
+            dwBuildNumber = CASCLIB_MAX(dwAccumulator, dwBuildNumber);
         }
         else
         {
             // Reset build number when we find non-digit char
-            dwBuildNumber = 0;
+            dwAccumulator = 0;
         }
 
         // Move to the next
@@ -546,9 +547,9 @@ static DWORD LoadBuildNumber(TCascStorage * hs, const char * /* szVariableName *
     }
 
     // If we don't have a build number yet, take the max value, if any
-    if(hs->dwBuildNumber == 0 && dwMaxValue >= 100)
+    if(dwBuildNumber >= 100 && PtrBuildNumber != NULL)
     {
-        hs->dwBuildNumber = dwMaxValue;
+        PtrBuildNumber[0] = dwBuildNumber;
         return ERROR_SUCCESS;
     }
     return ERROR_BAD_FORMAT;
@@ -739,7 +740,7 @@ static DWORD ParseFile_BuildInfo(TCascStorage * hs, CASC_CSV & Csv)
         const CASC_CSV_COLUMN & VerColumn = Csv[nSelected]["Version!STRING:0"];
         if(!VerColumn.Empty())
         {
-            LoadBuildNumber(hs, NULL, VerColumn.szValue, VerColumn.szValue + VerColumn.nLength, NULL);
+            LoadBuildNumber(hs, NULL, VerColumn.szValue, VerColumn.szValue + VerColumn.nLength, &hs->dwBuildNumber);
         }
 
         // At least the build key must be valid here
@@ -773,7 +774,7 @@ static DWORD ParseRegionLine_Versions(TCascStorage * hs, CASC_CSV & Csv, size_t 
     const CASC_CSV_COLUMN & VerColumn = Csv[nLine]["VersionsName!String:0"];
     if(VerColumn.szValue && VerColumn.nLength)
     {
-        LoadBuildNumber(hs, NULL, VerColumn.szValue, VerColumn.szValue + VerColumn.nLength, NULL);
+        LoadBuildNumber(hs, NULL, VerColumn.szValue, VerColumn.szValue + VerColumn.nLength, &hs->dwBuildNumber);
     }
 
     // Verify all variables
@@ -864,6 +865,7 @@ static DWORD ParseFile_CdnBuild(TCascStorage * hs, void * pvListFile)
 {
     const char * szLineBegin;
     const char * szLineEnd = NULL;
+    DWORD dwBuildNumber = 0;
     DWORD dwErrCode;
     USHORT CheckedFlags;
 
@@ -878,7 +880,7 @@ static DWORD ParseFile_CdnBuild(TCascStorage * hs, void * pvListFile)
         // Product name and build name
         if(CheckConfigFileVariable(hs, szLineBegin, szLineEnd, "build-uid", LoadBuildProductId, NULL))
             continue;
-        if(CheckConfigFileVariable(hs, szLineBegin, szLineEnd, "build-name", LoadBuildNumber, NULL))
+        if(CheckConfigFileVariable(hs, szLineBegin, szLineEnd, "build-name", LoadBuildNumber, &dwBuildNumber))
             continue;
 
         // Content key of the ROOT file. Look this up in ENCODING to get the encoded key
@@ -919,9 +921,12 @@ static DWORD ParseFile_CdnBuild(TCascStorage * hs, void * pvListFile)
 
     // Special case: Some builds of WoW (22267) don't have the variable in the build file
     if(hs->szCodeName == NULL && hs->szCdnPath != NULL)
-    {
         hs->szCodeName = CascNewStr(GetPlainFileName(hs->szCdnPath));
-    }
+
+    // Give build number from CDN config higher priority than from main file
+    // (".build.info", ".build.db" or "versions")
+    if(dwBuildNumber != 0)
+        hs->dwBuildNumber = dwBuildNumber;
 
     // Both CKey and EKey of ENCODING file is required
     CheckedFlags = (hs->BuildFileType == CascBuildConfig) ? hs->VfsRoot.Flags : hs->EncodingCKey.Flags;
