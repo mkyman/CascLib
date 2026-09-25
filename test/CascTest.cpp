@@ -1227,7 +1227,7 @@ static STORAGE_INFO StorageInfo2[] =
 //-----------------------------------------------------------------------------
 // Main
 
-//#define LOAD_STORAGES_PLAYING_SPACE
+#define LOAD_STORAGES_PLAYING_SPACE
 //#define LOAD_STORAGES_CMD_LINE
 #define LOAD_STORAGES_LOCAL
 #define LOAD_STORAGES_ONLINE
@@ -1261,7 +1261,7 @@ int main(int argc, char * argv[])
 
         // Open the online storage
         //if(CascOpenStorageEx(_T("d:\\Hry\\Diablo II Resurrected"), &OpenArgs, true, &hStorage))
-        if(CascOpenStorageEx(_T("e:\\Ladik\\Incoming\\Warcraft III"), &OpenArgs, true, &hStorage))
+        if(CascOpenStorageEx(_T("e:\\Multimedia\\CASC\\Work*w3t*us*3fbc4e1570e9ce0296f3af20985e0d0d"), &OpenArgs, true, &hStorage))
         {
             if(CascOpenFile(hStorage, "data:data\\local\\sfx\\common\\barbarian\\bar_datewithdeath.flac", 0, CASC_OVERCOME_ENCRYPTED | CASC_OPEN_CKEY_ONCE, &hFile))
             {
